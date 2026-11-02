@@ -14,7 +14,10 @@ use ratatui::{
 
 use crate::{
     history::History,
-    settings::Settings,
+    map_history::MapHistory,
+    osu::Beatmap,
+    calc::Aggregation,
+    settings::{MAX_MAP_HISTORY, Settings},
     tracker::{Event, FinishedPlay, LivePlay, Outcome},
     ui,
     worker::{Command, Connection, Update, WorkerConfig},
@@ -26,11 +29,14 @@ const INPUT_TICK: Duration = Duration::from_millis(50);
 pub struct App {
     pub settings: Settings,
     pub history: History,
+    /// Per-beatmap plays for the local suggestion (this session only).
+    pub map_history: MapHistory,
     settings_path: PathBuf,
     history_path: PathBuf,
 
     pub connection: Connection,
     pub global_offset: Option<i32>,
+    pub beatmap: Option<Beatmap>,
     pub live: Option<LivePlay>,
     pub last_play: Option<FinishedPlay>,
     /// One-line feedback (last play result, save errors, ...).
@@ -48,7 +54,9 @@ pub struct SettingsMenu {
     pub selected: usize,
 }
 
-pub const SETTING_COUNT: usize = 3;
+pub const SETTING_COUNT: usize = 5;
+/// Settings toggled with Space as well as ←→.
+const TOGGLES: [usize; 2] = [2, 4];
 
 impl App {
     pub fn new(
@@ -62,10 +70,12 @@ impl App {
         Self {
             settings,
             history,
+            map_history: MapHistory::default(),
             settings_path,
             history_path,
             connection: Connection::WaitingForOsu,
             global_offset: None,
+            beatmap: None,
             live: None,
             last_play: None,
             message: None,
@@ -97,11 +107,13 @@ impl App {
         match update {
             Update::Connection(connection) => self.connection = connection,
             Update::GlobalOffset(offset) => self.global_offset = Some(offset),
+            Update::Beatmap(beatmap) => self.beatmap = beatmap,
             Update::Live(live) => self.live = live,
             Update::Play(Event::Started { .. }) => {}
             Update::Play(Event::Finished(play)) => {
                 self.message = Some(match &play.outcome {
                     Outcome::Recorded(record) => {
+                        self.map_history.push(record.clone(), self.settings.map_history_size);
                         self.history.push(record.clone(), self.settings.history_size);
                         match self.history.save(&self.history_path) {
                             Ok(()) => format!("Recorded: S {:+.1} ms", record.suggestion()),
@@ -133,7 +145,9 @@ impl App {
                 KeyCode::Down => menu.selected = (menu.selected + 1).min(SETTING_COUNT - 1),
                 KeyCode::Left => adjust(&mut menu.draft, menu.selected, -1),
                 KeyCode::Right => adjust(&mut menu.draft, menu.selected, 1),
-                KeyCode::Char(' ') if menu.selected == 2 => adjust(&mut menu.draft, 2, 1),
+                KeyCode::Char(' ') if TOGGLES.contains(&menu.selected) => {
+                    adjust(&mut menu.draft, menu.selected, 1);
+                }
                 KeyCode::Enter => {
                     let draft = menu.draft.clone();
                     self.menu = None;
@@ -148,6 +162,7 @@ impl App {
         let shrunk = settings.history_size < self.history.plays().len();
         self.settings = settings;
         self.history.trim(self.settings.history_size);
+        self.map_history.trim(self.settings.map_history_size);
         let _ = self.commands.send(Command::Configure(worker_config(&self.settings)));
 
         let result = self
@@ -183,6 +198,16 @@ fn adjust(settings: &mut Settings, index: usize, direction: i64) {
                 (settings.poll_interval_ms as i64 + 10 * direction).clamp(10, 5_000) as u64;
         }
         2 => settings.count_autopilot = !settings.count_autopilot,
+        3 => {
+            settings.map_history_size = (settings.map_history_size as i64 + direction)
+                .clamp(1, MAX_MAP_HISTORY as i64) as usize;
+        }
+        4 => {
+            settings.map_aggregation = match settings.map_aggregation {
+                Aggregation::Mean => Aggregation::Median,
+                Aggregation::Median => Aggregation::Mean,
+            };
+        }
         _ => {}
     }
 }
@@ -200,6 +225,12 @@ mod tests {
         assert_eq!(settings.poll_interval_ms, 90);
         adjust(&mut settings, 2, 1);
         assert!(settings.count_autopilot);
+        adjust(&mut settings, 3, 1);
+        assert_eq!(settings.map_history_size, 2);
+        adjust(&mut settings, 3, -5);
+        assert_eq!(settings.map_history_size, 1);
+        adjust(&mut settings, 4, 1);
+        assert_eq!(settings.map_aggregation, Aggregation::Median);
 
         settings.history_size = 1;
         adjust(&mut settings, 0, -1);

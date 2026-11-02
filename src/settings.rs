@@ -5,7 +5,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::storage;
+use crate::{calc::Aggregation, storage};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 // Any field missing from the file falls back to its default, so adding new
@@ -18,7 +18,13 @@ pub struct Settings {
     pub poll_interval_ms: u64,
     /// Count plays with Autopilot (off by default).
     pub count_autopilot: bool,
+    /// Plays kept per beatmap for the local suggestion (in memory only).
+    pub map_history_size: usize,
+    /// How a beatmap's plays are combined: "mean" or "median".
+    pub map_aggregation: Aggregation,
 }
+
+pub const MAX_MAP_HISTORY: usize = 50;
 
 impl Default for Settings {
     fn default() -> Self {
@@ -26,6 +32,8 @@ impl Default for Settings {
             history_size: 50,
             poll_interval_ms: 100,
             count_autopilot: false,
+            map_history_size: 1,
+            map_aggregation: Aggregation::Mean,
         }
     }
 }
@@ -59,6 +67,7 @@ impl Settings {
     fn sanitized(mut self) -> Self {
         self.history_size = self.history_size.max(1);
         self.poll_interval_ms = self.poll_interval_ms.clamp(10, 5_000);
+        self.map_history_size = self.map_history_size.clamp(1, MAX_MAP_HISTORY);
         self
     }
 }
@@ -94,11 +103,21 @@ mod tests {
             history_size: 0,
             poll_interval_ms: 1,
             count_autopilot: true,
+            map_history_size: 500,
+            map_aggregation: Aggregation::Median,
         };
         custom.save(&path).unwrap();
         let loaded = Settings::load_or_create(&path).unwrap();
         assert_eq!(loaded.history_size, 1);
         assert_eq!(loaded.poll_interval_ms, 10);
         assert!(loaded.count_autopilot);
+        assert_eq!(loaded.map_history_size, MAX_MAP_HISTORY);
+        assert_eq!(loaded.map_aggregation, Aggregation::Median);
+    }
+
+    #[test]
+    fn aggregation_is_written_in_lowercase() {
+        let text = toml::to_string(&Settings::default()).unwrap();
+        assert!(text.contains("map_aggregation = \"mean\""));
     }
 }

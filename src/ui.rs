@@ -1,8 +1,11 @@
 //! Drawing the TUI. Pure rendering: reads `App`, never changes it.
 //!
-//! ┌ Suggestion ───────────┐┌ osu! ───────────────────┐
-//! │ Apply / current / mean ││ connection, live play   │
+//! ┌ Global offset ─────────┐┌ Local offset (this map) ┐
+//! │ Apply / current / mean ││ Apply / current / basis │
 //! └────────────────────────┘└─────────────────────────┘
+//! ┌ osu! ─────────────────────────────────────────────┐
+//! │ connection, current global, live play, message    │
+//! └───────────────────────────────────────────────────┘
 //! ┌ Hit errors (live or last play) ──────────────────┐
 //! │ histogram across the 50 window, coloured by zone │
 //! └───────────────────────────────────────────────────┘
@@ -20,7 +23,7 @@ use ratatui::{
 
 use crate::{
     app::{App, SettingsMenu},
-    calc,
+    calc::{self, Aggregation},
     tracker::SkipReason,
     worker::Connection,
 };
@@ -31,17 +34,19 @@ const COLOR_100: Color = Color::Rgb(136, 221, 85);
 const COLOR_50: Color = Color::Rgb(255, 204, 34);
 
 pub fn draw(frame: &mut Frame, app: &App) {
-    let [top, graph, table, footer] = Layout::vertical([
+    let [top, status, graph, table, footer] = Layout::vertical([
         Constraint::Length(7),
-        Constraint::Min(10),
+        Constraint::Length(5),
+        Constraint::Min(8),
         Constraint::Length(10),
         Constraint::Length(1),
     ])
     .areas(frame.area());
-    let [suggestion, status] =
+    let [suggestion, local] =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(top);
 
     draw_suggestion(frame, suggestion, app);
+    draw_local(frame, local, app);
     draw_status(frame, status, app);
     draw_graph(frame, graph, app);
     draw_history(frame, table, app);
@@ -56,7 +61,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 }
 
 fn draw_suggestion(frame: &mut Frame, area: Rect, app: &App) {
-    let block = Block::bordered().title(" Suggested global offset ");
+    let block = Block::bordered().title(" Global offset ");
     let lines = match app.history.suggestion() {
         None => vec![
             Line::from("No plays recorded yet."),
@@ -90,6 +95,65 @@ fn draw_suggestion(frame: &mut Frame, area: Rect, app: &App) {
             lines
         }
     };
+    frame.render_widget(Paragraph::new(lines).block(block), area);
+}
+
+fn draw_local(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::bordered().title(" Local offset (this map) ");
+    let Some(beatmap) = &app.beatmap else {
+        frame.render_widget(
+            Paragraph::new("No beatmap selected.").dark_gray().block(block),
+            area,
+        );
+        return;
+    };
+    let how = app.settings.map_aggregation;
+    let mut lines = vec![Line::from(beatmap.name.clone()).dark_gray()];
+    match app
+        .map_history
+        .suggestion(&beatmap.checksum, how, app.global_offset)
+    {
+        None => {
+            lines.push(Line::from(format!(
+                "Current: {:+} ms",
+                beatmap.local_offset
+            )));
+            lines.push(Line::from("No plays on this map yet (this session).").dark_gray());
+        }
+        Some(local) => {
+            lines.push(Line::from(vec![
+                Span::raw("Apply:   "),
+                Span::styled(
+                    format!("{:+} ms", local.apply),
+                    Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                ),
+            ]));
+            let change = local.apply - beatmap.local_offset;
+            let hint = match change {
+                0 => "already set".to_string(),
+                _ => format!("change {change:+} ms"),
+            };
+            lines.push(Line::from(format!(
+                "Current: {:+} ms  ({hint})",
+                beatmap.local_offset
+            )));
+            let label = match how {
+                Aggregation::Mean => "Mean",
+                Aggregation::Median => "Median",
+            };
+            lines.push(Line::from(format!(
+                "{label}:    {:+.2} ms over {} play{}",
+                local.value,
+                local.plays,
+                if local.plays == 1 { "" } else { "s" }
+            )));
+            if let Some(adjusted) = local.adjusted_for_global {
+                lines.push(
+                    Line::from(format!("With current global: {adjusted:+} ms")).dark_gray(),
+                );
+            }
+        }
+    }
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
@@ -229,7 +293,7 @@ fn draw_settings(frame: &mut Frame, menu: &SettingsMenu) {
     let [area] = Layout::horizontal([Constraint::Length(46)])
         .flex(Flex::Center)
         .areas(frame.area());
-    let [area] = Layout::vertical([Constraint::Length(9)])
+    let [area] = Layout::vertical([Constraint::Length(11)])
         .flex(Flex::Center)
         .areas(area);
 
@@ -239,6 +303,14 @@ fn draw_settings(frame: &mut Frame, menu: &SettingsMenu) {
         format!(
             "Count Autopilot     [{}]",
             if menu.draft.count_autopilot { "x" } else { " " }
+        ),
+        format!("Plays per map       < {} >", menu.draft.map_history_size),
+        format!(
+            "Per-map combine     < {} >",
+            match menu.draft.map_aggregation {
+                Aggregation::Mean => "mean",
+                Aggregation::Median => "median",
+            }
         ),
     ];
     let mut lines: Vec<Line> = items
@@ -334,6 +406,15 @@ mod tests {
             update_rx,
         );
         app.global_offset = Some(-35);
+        app.beatmap = Some(crate::osu::Beatmap {
+            checksum: "abc".into(),
+            name: "Artist - Song [Insane]".into(),
+            od: 8.0,
+            local_offset: 0,
+        });
+        let mut local = PlayRecord::new(-30, 0, 0, PlayStats { median: 4.6, unstable_rate: 80.0, hits: 200 });
+        local.map_checksum = Some("abc".into());
+        app.map_history.push(local, 1);
         app.connection = Connection::Connected(1234);
         let errors: Vec<i32> = (0..400).map(|i| (i * 37 % 120) - 55).collect();
         app.last_play = Some(FinishedPlay {
@@ -361,7 +442,11 @@ mod tests {
     fn renders_main_screen() {
         let screen = render(&sample_app(), 100, 32);
         println!("{screen}");
-        assert!(screen.contains("Suggested global offset"));
+        assert!(screen.contains("Global offset"));
+        assert!(screen.contains("Local offset (this map)"));
+        // +4.6 -> apply +5; global moved -30 -> -35, so adjusted is 0.
+        assert!(screen.contains("Apply:   +5 ms"));
+        assert!(screen.contains("With current global: +0 ms"));
         assert!(screen.contains("Connected (pid 1234)"));
         assert!(screen.contains("Recent plays (3/50)"));
         assert!(screen.contains("Last play: M"));
@@ -373,6 +458,8 @@ mod tests {
         app.menu = Some(SettingsMenu { draft: Settings::default(), selected: 1 });
         let screen = render(&app, 100, 32);
         assert!(screen.contains("> Poll interval       < 100 ms >"));
+        assert!(screen.contains("Plays per map       < 1 >"));
+        assert!(screen.contains("Per-map combine     < mean >"));
         // Must not panic on a very small terminal.
         render(&app, 10, 5);
     }

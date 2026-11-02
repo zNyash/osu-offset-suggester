@@ -3,6 +3,7 @@
 mod app;
 mod calc;
 mod history;
+mod map_history;
 mod memory;
 mod osu;
 mod process;

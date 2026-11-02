@@ -139,6 +139,41 @@ pub fn play_suggestion(global_offset: i32, median: f64, unstable_rate: f64) -> f
     f64::from(global_offset) - dampened_median(median, unstable_rate)
 }
 
+/// How several plays' suggestions are combined into one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Aggregation {
+    #[default]
+    Mean,
+    Median,
+}
+
+/// Local (per-beatmap) suggestion for one play, in stable's convention:
+/// late (positive M) -> positive local offset. Independent of the global offset.
+pub fn local_play_suggestion(local_offset: i32, median: f64, unstable_rate: f64) -> f64 {
+    f64::from(local_offset) + dampened_median(median, unstable_rate)
+}
+
+/// Mean or median of `values`; `None` when empty.
+pub fn combine(values: &[f64], how: Aggregation) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    Some(match how {
+        Aggregation::Mean => values.iter().sum::<f64>() / values.len() as f64,
+        Aggregation::Median => {
+            let mut sorted = values.to_vec();
+            sorted.sort_by(f64::total_cmp);
+            let mid = sorted.len() / 2;
+            if sorted.len().is_multiple_of(2) {
+                (sorted[mid - 1] + sorted[mid]) / 2.0
+            } else {
+                sorted[mid]
+            }
+        }
+    })
+}
+
 /// The global suggestion over the history.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GlobalSuggestion {
@@ -242,6 +277,22 @@ mod tests {
     fn late_tapping_suggests_a_more_negative_global_offset() {
         assert_eq!(play_suggestion(0, 7.0, 80.0), -7.0);
         assert_eq!(play_suggestion(-5, -2.0, 80.0), -3.0);
+    }
+
+    #[test]
+    fn late_tapping_suggests_a_positive_local_offset() {
+        assert_eq!(local_play_suggestion(0, 5.0, 80.0), 5.0);
+        assert_eq!(local_play_suggestion(10, -3.0, 80.0), 7.0);
+        let damped = local_play_suggestion(0, 10.0, 100.0);
+        assert!((damped - 10.0 * (-0.116_f64).exp()).abs() < 1e-12);
+    }
+
+    #[test]
+    fn combine_mean_and_median() {
+        assert_eq!(combine(&[1.0, 2.0, 9.0], Aggregation::Mean), Some(4.0));
+        assert_eq!(combine(&[1.0, 2.0, 9.0], Aggregation::Median), Some(2.0));
+        assert_eq!(combine(&[1.0, 2.0, 4.0, 9.0], Aggregation::Median), Some(3.0));
+        assert_eq!(combine(&[], Aggregation::Mean), None);
     }
 
     #[test]

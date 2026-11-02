@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     memory::ProcessMemory,
-    osu::OsuReader,
+    osu::{Beatmap, OsuReader},
     process,
     tracker::{Event, LivePlay, Tracker},
 };
@@ -32,6 +32,8 @@ pub enum Update {
     Connection(Connection),
     /// Current global offset in osu!.
     GlobalOffset(i32),
+    /// The beatmap currently selected or playing in osu!.
+    Beatmap(Option<Beatmap>),
     /// The play in progress (`None` when not playing).
     Live(Option<LivePlay>),
     Play(Event),
@@ -101,6 +103,7 @@ impl Worker {
         let mut tracker = Tracker::default();
         let mut last_slow_check: Option<Instant> = None;
         let mut last_offset = None;
+        let mut last_beatmap: Option<Beatmap> = None;
         let mut last_live_len = None;
 
         loop {
@@ -108,6 +111,7 @@ impl Worker {
                 last_slow_check = Some(Instant::now());
                 if !matches!(process::is_running(pid), Ok(true)) {
                     self.send(Update::Live(None));
+                    self.send(Update::Beatmap(None));
                     return true; // osu! closed: go back to searching
                 }
                 if let Ok(offset) = reader.global_offset()
@@ -115,6 +119,12 @@ impl Worker {
                 {
                     last_offset = Some(offset);
                     self.send(Update::GlobalOffset(offset));
+                }
+                // Also catches local offset changes made in osu!.
+                let beatmap = reader.beatmap().ok();
+                if beatmap != last_beatmap {
+                    last_beatmap = beatmap.clone();
+                    self.send(Update::Beatmap(beatmap));
                 }
             }
 
