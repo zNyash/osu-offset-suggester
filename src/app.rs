@@ -42,6 +42,8 @@ pub struct App {
     /// One-line feedback (last play result, save errors, ...).
     pub message: Option<String>,
     pub menu: Option<SettingsMenu>,
+    /// A reset waiting for y/n.
+    pub confirm: Option<Reset>,
 
     commands: Sender<Command>,
     updates: Receiver<Update>,
@@ -49,6 +51,17 @@ pub struct App {
 }
 
 /// The settings popup: edits a draft, applied on Enter.
+/// What a reset key clears.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Reset {
+    /// The saved global history.
+    Global,
+    /// One beatmap's in-memory plays: (checksum, name).
+    Map(String, String),
+    /// Every beatmap's in-memory plays.
+    AllMaps,
+}
+
 pub struct SettingsMenu {
     pub draft: Settings,
     pub selected: usize,
@@ -80,6 +93,7 @@ impl App {
             last_play: None,
             message: None,
             menu: None,
+            confirm: None,
             commands,
             updates,
             quit: false,
@@ -128,9 +142,24 @@ impl App {
     }
 
     fn on_key(&mut self, key: KeyCode) {
+        if let Some(reset) = self.confirm.take() {
+            match key {
+                KeyCode::Char('y') | KeyCode::Char('Y') => self.reset(reset),
+                _ => self.message = Some("Reset cancelled".into()),
+            }
+            return;
+        }
         match &mut self.menu {
             None => match key {
                 KeyCode::Char('q') | KeyCode::Esc => self.quit = true,
+                KeyCode::Char('g') => self.confirm = Some(Reset::Global),
+                KeyCode::Char('m') => match &self.beatmap {
+                    Some(beatmap) => {
+                        self.confirm = Some(Reset::Map(beatmap.checksum.clone(), beatmap.name.clone()));
+                    }
+                    None => self.message = Some("No beatmap selected to reset".into()),
+                },
+                KeyCode::Char('a') => self.confirm = Some(Reset::AllMaps),
                 KeyCode::Char('s') => {
                     self.menu = Some(SettingsMenu {
                         draft: self.settings.clone(),
@@ -156,6 +185,27 @@ impl App {
                 _ => {}
             },
         }
+    }
+
+    fn reset(&mut self, reset: Reset) {
+        self.message = Some(match reset {
+            Reset::Global => {
+                let plays = self.history.plays().len();
+                self.history.clear();
+                match self.history.save(&self.history_path) {
+                    Ok(()) => format!("Global history reset ({plays} plays removed)"),
+                    Err(error) => format!("Global history cleared, but saving failed: {error:#}"),
+                }
+            }
+            Reset::Map(checksum, name) => {
+                let plays = self.map_history.clear_map(&checksum);
+                format!("Reset {name} ({plays} plays removed)")
+            }
+            Reset::AllMaps => {
+                let maps = self.map_history.clear_all();
+                format!("All per-map history reset ({maps} maps)")
+            }
+        });
     }
 
     fn apply_settings(&mut self, settings: Settings) {
@@ -215,6 +265,63 @@ fn adjust(settings: &mut Settings, index: usize, direction: i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use std::sync::mpsc;
+
+    use crate::{calc::PlayStats, history::PlayRecord};
+
+    fn app_with_plays() -> (App, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let (command_tx, _) = mpsc::channel();
+        let (_, update_rx) = mpsc::channel();
+        let mut app = App::new(
+            Settings::default(),
+            History::default(),
+            dir.path().join("settings.toml"),
+            dir.path().join("history.json"),
+            command_tx,
+            update_rx,
+        );
+        for map in ["a", "a", "b"] {
+            let mut record = PlayRecord::new(0, 0, 0, PlayStats { median: 1.0, unstable_rate: 80.0, hits: 60 });
+            record.map_checksum = Some(map.into());
+            app.history.push(record.clone(), 50);
+            app.map_history.push(record, 5);
+        }
+        app.beatmap = Some(Beatmap { checksum: "a".into(), name: "Map A".into(), od: 8.0, local_offset: 0 });
+        (app, dir)
+    }
+
+    #[test]
+    fn resets_need_confirmation() {
+        let (mut app, _dir) = app_with_plays();
+        app.on_key(KeyCode::Char('g'));
+        assert_eq!(app.confirm, Some(Reset::Global));
+        app.on_key(KeyCode::Char('n'));
+        assert_eq!(app.history.plays().len(), 3);
+        assert!(app.confirm.is_none());
+
+        app.on_key(KeyCode::Char('g'));
+        app.on_key(KeyCode::Char('y'));
+        assert!(app.history.plays().is_empty());
+        // The cleared history was saved to disk.
+        assert!(History::load(&app.history_path, 50).unwrap().plays().is_empty());
+    }
+
+    #[test]
+    fn resets_current_map_then_all_maps() {
+        let (mut app, _dir) = app_with_plays();
+        let mean = Aggregation::Mean;
+        app.on_key(KeyCode::Char('m'));
+        app.on_key(KeyCode::Char('y'));
+        assert!(app.map_history.suggestion("a", mean, None).is_none());
+        assert!(app.map_history.suggestion("b", mean, None).is_some());
+        assert_eq!(app.history.plays().len(), 3, "global history untouched");
+
+        app.on_key(KeyCode::Char('a'));
+        app.on_key(KeyCode::Char('y'));
+        assert!(app.map_history.suggestion("b", mean, None).is_none());
+    }
 
     #[test]
     fn adjust_steps_and_clamps() {

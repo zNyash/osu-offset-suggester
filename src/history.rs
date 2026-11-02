@@ -102,6 +102,10 @@ impl History {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.plays.clear();
+    }
+
     pub fn plays(&self) -> &VecDeque<PlayRecord> {
         &self.plays
     }

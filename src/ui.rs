@@ -11,7 +11,7 @@
 //! └───────────────────────────────────────────────────┘
 //! ┌ Recent plays ─────────────────────────────────────┐
 //! └───────────────────────────────────────────────────┘
-//!  s settings · q quit
+//!  s settings · g/m/a reset · q quit
 
 use ratatui::{
     Frame,
@@ -22,7 +22,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::{App, SettingsMenu},
+    app::{App, Reset, SettingsMenu},
     calc::{self, Aggregation},
     tracker::SkipReason,
     worker::Connection,
@@ -51,12 +51,18 @@ pub fn draw(frame: &mut Frame, app: &App) {
     draw_graph(frame, graph, app);
     draw_history(frame, table, app);
     frame.render_widget(
-        Line::from(" s settings · q quit").style(Style::new().dark_gray()),
+        Line::from(
+            " s settings · g reset global · m reset this map · a reset all maps · q quit",
+        )
+        .style(Style::new().dark_gray()),
         footer,
     );
 
     if let Some(menu) = &app.menu {
         draw_settings(frame, menu);
+    }
+    if let Some(reset) = &app.confirm {
+        draw_confirm(frame, app, reset);
     }
 }
 
@@ -334,6 +340,31 @@ fn draw_settings(frame: &mut Frame, menu: &SettingsMenu) {
     );
 }
 
+fn draw_confirm(frame: &mut Frame, app: &App, reset: &Reset) {
+    let question = match reset {
+        Reset::Global => format!(
+            "Reset the global history ({} plays)?",
+            app.history.plays().len()
+        ),
+        Reset::Map(_, name) => format!("Reset this map's plays?\n{name}"),
+        Reset::AllMaps => "Reset the per-map history for every map?".into(),
+    };
+    let [area] = Layout::horizontal([Constraint::Length(54)])
+        .flex(Flex::Center)
+        .areas(frame.area());
+    let [area] = Layout::vertical([Constraint::Length(6)])
+        .flex(Flex::Center)
+        .areas(area);
+    let mut lines: Vec<Line> = question.lines().map(|l| Line::from(l.to_string())).collect();
+    lines.push(Line::from(""));
+    lines.push(Line::from("y confirm · any other key cancels").dark_gray());
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Paragraph::new(lines).block(Block::bordered().title(" Reset ").red()),
+        area,
+    );
+}
+
 pub fn skip_reason(reason: &SkipReason) -> String {
     match reason {
         SkipReason::NotStandard => "not osu!standard".into(),
@@ -460,6 +491,9 @@ mod tests {
         assert!(screen.contains("> Poll interval       < 100 ms >"));
         assert!(screen.contains("Plays per map       < 1 >"));
         assert!(screen.contains("Per-map combine     < mean >"));
+        app.menu = None;
+        app.confirm = Some(Reset::Global);
+        assert!(render(&app, 100, 32).contains("Reset the global history (3 plays)?"));
         // Must not panic on a very small terminal.
         render(&app, 10, 5);
     }

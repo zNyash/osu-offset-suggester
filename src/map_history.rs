@@ -51,6 +51,18 @@ impl MapHistory {
         }
     }
 
+    /// Forget one beatmap's plays. Returns how many were removed.
+    pub fn clear_map(&mut self, checksum: &str) -> usize {
+        self.maps.remove(checksum).map_or(0, |plays| plays.len())
+    }
+
+    /// Forget every beatmap's plays. Returns how many maps were cleared.
+    pub fn clear_all(&mut self) -> usize {
+        let maps = self.maps.len();
+        self.maps.clear();
+        maps
+    }
+
     pub fn suggestion(
         &self,
         checksum: &str,
@@ -144,6 +156,19 @@ mod tests {
         let s = maps.suggestion("a", Aggregation::Mean, Some(-5)).unwrap();
         assert_eq!(s.apply, 5);
         assert_eq!(s.adjusted_for_global, Some(0));
+    }
+
+    #[test]
+    fn clearing_one_map_or_all() {
+        let mut maps = MapHistory::default();
+        maps.push(play("a", 0, 0, 1.0), 5);
+        maps.push(play("a", 0, 0, 2.0), 5);
+        maps.push(play("b", 0, 0, 3.0), 5);
+        assert_eq!(maps.clear_map("a"), 2);
+        assert!(maps.suggestion("a", Aggregation::Mean, None).is_none());
+        assert!(maps.suggestion("b", Aggregation::Mean, None).is_some());
+        assert_eq!(maps.clear_all(), 1);
+        assert!(maps.suggestion("b", Aggregation::Mean, None).is_none());
     }
 
     #[test]
