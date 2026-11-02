@@ -54,7 +54,14 @@ const SEARCH_INTERVAL: Duration = Duration::from_secs(2);
 const SLOW_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 
 pub fn spawn(config: WorkerConfig, commands: Receiver<Command>, updates: Sender<Update>) {
-    thread::spawn(move || Worker { config, commands, updates }.run());
+    thread::spawn(move || {
+        Worker {
+            config,
+            commands,
+            updates,
+        }
+        .run()
+    });
 }
 
 struct Worker {

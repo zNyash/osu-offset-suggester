@@ -141,8 +141,8 @@ impl<M: MemSource> OsuReader<M> {
 
         // Mods are stored XOR-obfuscated: two ints that XOR to the value.
         let mods_object = self.non_null_ptr(score + 0x1c)?;
-        let mods = read_i32(&self.memory, mods_object + 0xc)?
-            ^ read_i32(&self.memory, mods_object + 0x8)?;
+        let mods =
+            read_i32(&self.memory, mods_object + 0xc)? ^ read_i32(&self.memory, mods_object + 0x8)?;
 
         let hp_bar = self.non_null_ptr(gameplay + 0x40)?;
         let hp = read_f64(&self.memory, hp_bar + 0x1c)?;
@@ -428,7 +428,9 @@ mod tests {
         world.string_at(table as u64 + 0x8, "Volume");
         world.string_at(table as u64 + 0x18, "Offset");
         world.memory.put_u32(table as u64 + 0x18 + 0x4, binding);
-        world.memory.write(binding as u64 + 0x4, &(-7.4_f64).to_le_bytes());
+        world
+            .memory
+            .write(binding as u64 + 0x4, &(-7.4_f64).to_le_bytes());
 
         let mut reader = world.reader();
         assert_eq!(reader.global_offset().unwrap(), -7);

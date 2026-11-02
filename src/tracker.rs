@@ -10,8 +10,8 @@ use anyhow::Result;
 use crate::{
     calc,
     history::PlayRecord,
-    osu::{Beatmap, Gameplay, MODE_STANDARD, OsuReader, Status},
     memory::MemSource,
+    osu::{Beatmap, Gameplay, MODE_STANDARD, OsuReader, Status},
 };
 
 /// Mods that disqualify a play (no real tapping, or not timed by the player).
@@ -200,12 +200,8 @@ fn finish(play: CurrentPlay, count_autopilot: bool) -> FinishedPlay {
     } else {
         match calc::analyze_play(&play.errors, f64::from(play.beatmap.od), mods) {
             Some(stats) => {
-                let mut record = PlayRecord::new(
-                    play.global_offset,
-                    play.beatmap.local_offset,
-                    mods,
-                    stats,
-                );
+                let mut record =
+                    PlayRecord::new(play.global_offset, play.beatmap.local_offset, mods, stats);
                 record.map_checksum = Some(play.beatmap.checksum.clone());
                 record.map_name = Some(play.beatmap.name.clone());
                 Outcome::Recorded(record)

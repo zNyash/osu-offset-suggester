@@ -72,7 +72,11 @@ pub fn window_50(od: f64) -> i32 {
 /// Keep only hits strictly inside the 100 window. A hit exactly on the
 /// cutoff is a 50 in-game, so it is dropped too.
 pub fn filter_50s(errors: &[i32], cutoff: i32) -> Vec<i32> {
-    errors.iter().copied().filter(|e| e.abs() < cutoff).collect()
+    errors
+        .iter()
+        .copied()
+        .filter(|e| e.abs() < cutoff)
+        .collect()
 }
 
 /// Median; an even count averages the two middle values.
@@ -113,7 +117,11 @@ pub fn analyze_play(errors: &[i32], od: f64, mod_bits: u32) -> Option<PlayStats>
 }
 
 /// Same as [`analyze_play`], for an OD that already has HR/EZ applied.
-pub fn analyze_with_effective_od(errors: &[i32], effective_od: f64, rate: f64) -> Option<PlayStats> {
+pub fn analyze_with_effective_od(
+    errors: &[i32],
+    effective_od: f64,
+    rate: f64,
+) -> Option<PlayStats> {
     let kept = filter_50s(errors, cutoff_100(effective_od));
     if kept.len() < MIN_HITS {
         return None;
@@ -291,7 +299,10 @@ mod tests {
     fn combine_mean_and_median() {
         assert_eq!(combine(&[1.0, 2.0, 9.0], Aggregation::Mean), Some(4.0));
         assert_eq!(combine(&[1.0, 2.0, 9.0], Aggregation::Median), Some(2.0));
-        assert_eq!(combine(&[1.0, 2.0, 4.0, 9.0], Aggregation::Median), Some(3.0));
+        assert_eq!(
+            combine(&[1.0, 2.0, 4.0, 9.0], Aggregation::Median),
+            Some(3.0)
+        );
         assert_eq!(combine(&[], Aggregation::Mean), None);
     }
 

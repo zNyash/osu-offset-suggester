@@ -51,10 +51,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
     draw_graph(frame, graph, app);
     draw_history(frame, table, app);
     frame.render_widget(
-        Line::from(
-            " s settings · g reset global · m reset this map · a reset all maps · q quit",
-        )
-        .style(Style::new().dark_gray()),
+        Line::from(" s settings · g reset global · m reset this map · a reset all maps · q quit")
+            .style(Style::new().dark_gray()),
         footer,
     );
 
@@ -108,7 +106,9 @@ fn draw_local(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::bordered().title(" Local offset (this map) ");
     let Some(beatmap) = &app.beatmap else {
         frame.render_widget(
-            Paragraph::new("No beatmap selected.").dark_gray().block(block),
+            Paragraph::new("No beatmap selected.")
+                .dark_gray()
+                .block(block),
             area,
         );
         return;
@@ -154,9 +154,7 @@ fn draw_local(frame: &mut Frame, area: Rect, app: &App) {
                 if local.plays == 1 { "" } else { "s" }
             )));
             if let Some(adjusted) = local.adjusted_for_global {
-                lines.push(
-                    Line::from(format!("With current global: {adjusted:+} ms")).dark_gray(),
-                );
+                lines.push(Line::from(format!("With current global: {adjusted:+} ms")).dark_gray());
             }
         }
     }
@@ -227,7 +225,10 @@ fn draw_graph(frame: &mut Frame, area: Rect, app: &App) {
             " {label}: M {:+.1} ms · UR {:.1} · {} hits · 300 ±{w300} 100 ±{w100} 50 ±{w50} ",
             stats.median, stats.unstable_rate, stats.hits
         ),
-        None => format!(" {label}: {} hits · 300 ±{w300} 100 ±{w100} 50 ±{w50} ", errors.len()),
+        None => format!(
+            " {label}: {} hits · 300 ±{w300} 100 ±{w100} 50 ±{w50} ",
+            errors.len()
+        ),
     };
     let block = Block::bordered()
         .title(title)
@@ -355,7 +356,10 @@ fn draw_confirm(frame: &mut Frame, app: &App, reset: &Reset) {
     let [area] = Layout::vertical([Constraint::Length(6)])
         .flex(Flex::Center)
         .areas(area);
-    let mut lines: Vec<Line> = question.lines().map(|l| Line::from(l.to_string())).collect();
+    let mut lines: Vec<Line> = question
+        .lines()
+        .map(|l| Line::from(l.to_string()))
+        .collect();
     lines.push(Line::from(""));
     lines.push(Line::from("y confirm · any other key cancels").dark_gray());
     frame.render_widget(Clear, area);
@@ -392,7 +396,8 @@ pub fn mods_string(mods: u32) -> String {
     let mut text = String::new();
     for (bit, name) in NAMES {
         // NC implies DT, SD is replaced by PF: show only the stronger one.
-        let hidden = (name == "DT" && mods & (1 << 9) != 0) || (name == "SD" && mods & (1 << 14) != 0);
+        let hidden =
+            (name == "DT" && mods & (1 << 9) != 0) || (name == "SD" && mods & (1 << 14) != 0);
         if mods & bit != 0 && !hidden {
             text.push_str(name);
         }
@@ -421,7 +426,11 @@ mod tests {
                 g,
                 0,
                 64,
-                PlayStats { median, unstable_rate: 120.0, hits: 300 },
+                PlayStats {
+                    median,
+                    unstable_rate: 120.0,
+                    hits: 300,
+                },
             );
             record.map_name = Some("Artist - Song [Insane]".into());
             history.push(record, 50);
@@ -443,7 +452,16 @@ mod tests {
             od: 8.0,
             local_offset: 0,
         });
-        let mut local = PlayRecord::new(-30, 0, 0, PlayStats { median: 4.6, unstable_rate: 80.0, hits: 200 });
+        let mut local = PlayRecord::new(
+            -30,
+            0,
+            0,
+            PlayStats {
+                median: 4.6,
+                unstable_rate: 80.0,
+                hits: 200,
+            },
+        );
         local.map_checksum = Some("abc".into());
         app.map_history.push(local, 1);
         app.connection = Connection::Connected(1234);
@@ -464,7 +482,11 @@ mod tests {
         terminal.draw(|frame| draw(frame, app)).unwrap();
         let buffer = terminal.backend().buffer();
         (0..height)
-            .map(|y| (0..width).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .map(|y| {
+                (0..width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -486,7 +508,10 @@ mod tests {
     #[test]
     fn renders_settings_menu_and_tiny_terminals() {
         let mut app = sample_app();
-        app.menu = Some(SettingsMenu { draft: Settings::default(), selected: 1 });
+        app.menu = Some(SettingsMenu {
+            draft: Settings::default(),
+            selected: 1,
+        });
         let screen = render(&app, 100, 32);
         assert!(screen.contains("> Poll interval       < 100 ms >"));
         assert!(screen.contains("Plays per map       < 1 >"));

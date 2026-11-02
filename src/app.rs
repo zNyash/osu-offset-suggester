@@ -13,10 +13,10 @@ use ratatui::{
 };
 
 use crate::{
+    calc::Aggregation,
     history::History,
     map_history::MapHistory,
     osu::Beatmap,
-    calc::Aggregation,
     settings::{MAX_MAP_HISTORY, Settings},
     tracker::{Event, FinishedPlay, LivePlay, Outcome},
     ui,
@@ -127,8 +127,10 @@ impl App {
             Update::Play(Event::Finished(play)) => {
                 self.message = Some(match &play.outcome {
                     Outcome::Recorded(record) => {
-                        self.map_history.push(record.clone(), self.settings.map_history_size);
-                        self.history.push(record.clone(), self.settings.history_size);
+                        self.map_history
+                            .push(record.clone(), self.settings.map_history_size);
+                        self.history
+                            .push(record.clone(), self.settings.history_size);
                         match self.history.save(&self.history_path) {
                             Ok(()) => format!("Recorded: S {:+.1} ms", record.suggestion()),
                             Err(error) => format!("Recorded, but saving failed: {error:#}"),
@@ -155,7 +157,8 @@ impl App {
                 KeyCode::Char('g') => self.confirm = Some(Reset::Global),
                 KeyCode::Char('m') => match &self.beatmap {
                     Some(beatmap) => {
-                        self.confirm = Some(Reset::Map(beatmap.checksum.clone(), beatmap.name.clone()));
+                        self.confirm =
+                            Some(Reset::Map(beatmap.checksum.clone(), beatmap.name.clone()));
                     }
                     None => self.message = Some("No beatmap selected to reset".into()),
                 },
@@ -213,7 +216,9 @@ impl App {
         self.settings = settings;
         self.history.trim(self.settings.history_size);
         self.map_history.trim(self.settings.map_history_size);
-        let _ = self.commands.send(Command::Configure(worker_config(&self.settings)));
+        let _ = self
+            .commands
+            .send(Command::Configure(worker_config(&self.settings)));
 
         let result = self
             .settings
@@ -283,12 +288,26 @@ mod tests {
             update_rx,
         );
         for map in ["a", "a", "b"] {
-            let mut record = PlayRecord::new(0, 0, 0, PlayStats { median: 1.0, unstable_rate: 80.0, hits: 60 });
+            let mut record = PlayRecord::new(
+                0,
+                0,
+                0,
+                PlayStats {
+                    median: 1.0,
+                    unstable_rate: 80.0,
+                    hits: 60,
+                },
+            );
             record.map_checksum = Some(map.into());
             app.history.push(record.clone(), 50);
             app.map_history.push(record, 5);
         }
-        app.beatmap = Some(Beatmap { checksum: "a".into(), name: "Map A".into(), od: 8.0, local_offset: 0 });
+        app.beatmap = Some(Beatmap {
+            checksum: "a".into(),
+            name: "Map A".into(),
+            od: 8.0,
+            local_offset: 0,
+        });
         (app, dir)
     }
 
@@ -305,7 +324,12 @@ mod tests {
         app.on_key(KeyCode::Char('y'));
         assert!(app.history.plays().is_empty());
         // The cleared history was saved to disk.
-        assert!(History::load(&app.history_path, 50).unwrap().plays().is_empty());
+        assert!(
+            History::load(&app.history_path, 50)
+                .unwrap()
+                .plays()
+                .is_empty()
+        );
     }
 
     #[test]

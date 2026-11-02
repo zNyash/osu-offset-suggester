@@ -131,8 +131,14 @@ mod tests {
         maps.push(play("a", 0, 0, 1.0), 1);
         maps.push(play("a", 0, 0, 9.0), 1);
         maps.push(play("b", 0, 0, 3.0), 1);
-        assert_eq!(maps.suggestion("a", Aggregation::Mean, None).unwrap().value, 9.0);
-        assert_eq!(maps.suggestion("b", Aggregation::Mean, None).unwrap().value, 3.0);
+        assert_eq!(
+            maps.suggestion("a", Aggregation::Mean, None).unwrap().value,
+            9.0
+        );
+        assert_eq!(
+            maps.suggestion("b", Aggregation::Mean, None).unwrap().value,
+            3.0
+        );
     }
 
     #[test]
@@ -141,11 +147,22 @@ mod tests {
         for median in [1.0, 2.0, 9.0] {
             maps.push(play("a", 0, 0, median), 3);
         }
-        assert_eq!(maps.suggestion("a", Aggregation::Mean, None).unwrap().value, 4.0);
-        assert_eq!(maps.suggestion("a", Aggregation::Median, None).unwrap().value, 2.0);
+        assert_eq!(
+            maps.suggestion("a", Aggregation::Mean, None).unwrap().value,
+            4.0
+        );
+        assert_eq!(
+            maps.suggestion("a", Aggregation::Median, None)
+                .unwrap()
+                .value,
+            2.0
+        );
 
         maps.trim(1);
-        assert_eq!(maps.suggestion("a", Aggregation::Mean, None).unwrap().plays, 1);
+        assert_eq!(
+            maps.suggestion("a", Aggregation::Mean, None).unwrap().plays,
+            1
+        );
     }
 
     #[test]

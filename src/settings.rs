@@ -80,7 +80,10 @@ mod tests {
     fn missing_file_creates_defaults() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config/settings.toml");
-        assert_eq!(Settings::load_or_create(&path).unwrap(), Settings::default());
+        assert_eq!(
+            Settings::load_or_create(&path).unwrap(),
+            Settings::default()
+        );
         assert!(path.exists());
     }
 
