@@ -1,6 +1,7 @@
 mod calc;
 mod history;
 mod memory;
+mod osu;
 mod process;
 mod settings;
 mod storage;
@@ -9,7 +10,8 @@ use anyhow::Result;
 
 use crate::{
     history::History,
-    memory::{MemSource, ProcessMemory},
+    memory::ProcessMemory,
+    osu::OsuReader,
     settings::Settings,
 };
 
@@ -30,18 +32,20 @@ fn main() -> Result<()> {
     // Temporary smoke check until the worker and TUI exist.
     match process::find_osu()? {
         Some(pid) => {
-            let memory = ProcessMemory::open(pid)?;
-            let regions = memory.regions()?;
-            let mut first = [0u8; 2];
-            let readable = regions
-                .iter()
-                .find(|region| region.readable)
-                .map(|region| memory.read(region.start, &mut first).is_ok());
-            println!(
-                "osu! found: pid {pid}, {} memory regions, read test: {}",
-                regions.len(),
-                if readable == Some(true) { "ok" } else { "FAILED" }
-            );
+            let mut osu = OsuReader::attach(ProcessMemory::open(pid)?)?;
+            println!("osu! found: pid {pid}");
+            println!("  status:        {:?}", osu.status());
+            println!("  replay:        {:?}", osu.is_watching_replay());
+            println!("  global offset: {:?}", osu.global_offset());
+            println!("  beatmap:       {:?}", osu.beatmap());
+            match osu.gameplay() {
+                Ok(play) => {
+                    println!("  gameplay:      {play:?}");
+                    let errors = osu.hit_errors_from(0)?;
+                    println!("  hit errors:    {} (first: {:?})", errors.len(), &errors[..errors.len().min(10)]);
+                }
+                Err(error) => println!("  gameplay:      none ({error:#})"),
+            }
         }
         None => println!("osu! is not running"),
     }

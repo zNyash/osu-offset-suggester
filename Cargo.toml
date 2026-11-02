@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.104"
 directories = "6.0.0"
+memchr = "2.8.3"
 proc-maps = "0.5.0"
 read-process-memory = "0.3.0"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -15,3 +16,7 @@ toml = "1.1.8"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+
+# The signature scan is hot; keep memchr fast even in debug builds.
+[profile.dev.package.memchr]
+opt-level = 3

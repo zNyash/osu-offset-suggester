@@ -137,8 +137,15 @@ fn scan_region(
         let window_start = cursor - carry.len() as u64;
         carry.extend_from_slice(&chunk);
 
-        for start in 0..carry.len().saturating_sub(pattern.len() - 1) {
-            if carry[start + pattern.anchor] == anchor_byte && pattern.matches(&carry[start..]) {
+        // memchr jumps straight to each occurrence of the anchor byte (SIMD),
+        // instead of checking every position one by one.
+        let last_start = carry.len().saturating_sub(pattern.len() - 1);
+        for hit in memchr::memchr_iter(anchor_byte, &carry[pattern.anchor..]) {
+            let start = hit;
+            if start >= last_start {
+                break;
+            }
+            if pattern.matches(&carry[start..]) {
                 let address = window_start + start as u64;
                 if !matches.contains(&address) {
                     matches.push(address);

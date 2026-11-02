@@ -282,6 +282,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "directories",
+ "memchr",
  "proc-maps",
  "read-process-memory",
  "serde",
