@@ -21,3 +21,9 @@ tempfile = "3.27.0"
 # The signature scan is hot; keep memchr fast even in debug builds.
 [profile.dev.package.memchr]
 opt-level = 3
+
+# Smaller, faster release binaries.
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

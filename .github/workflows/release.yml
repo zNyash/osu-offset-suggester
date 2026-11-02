@@ -1,0 +1,110 @@
+name: Release
+
+# Push a tag like `v0.1.0` to build both binaries and publish a GitHub
+# Release with them attached. "Run workflow" (manual) only builds and
+# uploads the binaries as workflow artifacts, without creating a release.
+#
+# Targets:
+# - x86_64-unknown-linux-musl: a fully static binary, runs on any x86_64
+#   distro (glibc version doesn't matter). osu! itself runs under Wine.
+# - x86_64-pc-windows-msvc: built with a static C runtime, so no Visual C++
+#   redistributable is needed. A 64-bit build can read the 32-bit osu!.exe.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN: offset-suggester
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            rustflags: -C target-feature=+crt-static
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install musl tools
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Test
+        # Tests run natively on the build machine (musl binaries run fine on
+        # the Ubuntu runner).
+        run: cargo test --locked --target ${{ matrix.target }}
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+
+      - name: Package
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            version="${GITHUB_SHA::7}"
+          fi
+          name="${BIN}-${version}-${{ matrix.target }}"
+          mkdir -p "dist/${name}"
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            cp "target/${{ matrix.target }}/release/${BIN}.exe" "dist/${name}/"
+            (cd dist && 7z a "${name}.zip" "${name}" > /dev/null)
+            asset="dist/${name}.zip"
+          else
+            cp "target/${{ matrix.target }}/release/${BIN}" "dist/${name}/"
+            tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+            asset="dist/${name}.tar.gz"
+          fi
+          (cd dist && sha256sum "$(basename "$asset")" > "$(basename "$asset").sha256")
+          echo "asset=${asset}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            ${{ steps.package.outputs.asset }}
+            ${{ steps.package.outputs.asset }}.sha256
+
+  release:
+    name: Publish release
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
