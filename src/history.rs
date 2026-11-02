@@ -106,10 +106,6 @@ impl History {
         &self.plays
     }
 
-    pub fn latest(&self) -> Option<&PlayRecord> {
-        self.plays.back()
-    }
-
     /// Mean of every play's S.
     pub fn suggestion(&self) -> Option<GlobalSuggestion> {
         let values: Vec<f64> = self.plays.iter().map(PlayRecord::suggestion).collect();
@@ -142,7 +138,7 @@ mod tests {
         }
         assert_eq!(history.plays().len(), 50);
         assert_eq!(history.plays().front().unwrap().median, 5.0);
-        assert_eq!(history.latest().unwrap().median, 54.0);
+        assert_eq!(history.plays().back().unwrap().median, 54.0);
     }
 
     #[test]

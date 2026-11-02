@@ -61,9 +61,21 @@ pub struct FinishedPlay {
     pub mods: u32,
     /// All raw hit errors (song time), for the hit-window graph.
     pub errors: Vec<i32>,
+    /// OD after HR/EZ, for drawing the hit windows.
+    pub od: f64,
     /// The 100/50 boundary used for this play.
     pub cutoff: i32,
     pub outcome: Outcome,
+}
+
+/// The play in progress, for the live view.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LivePlay {
+    pub map_name: String,
+    pub mods: u32,
+    /// OD after HR/EZ.
+    pub od: f64,
+    pub errors: Vec<i32>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -103,6 +115,16 @@ impl Tracker {
     /// Hit errors collected so far in the current play.
     pub fn live_errors(&self) -> Option<&[i32]> {
         self.current.as_ref().map(|play| play.errors.as_slice())
+    }
+
+    /// A copy of the play in progress, for the TUI.
+    pub fn live(&self) -> Option<LivePlay> {
+        self.current.as_ref().map(|play| LivePlay {
+            map_name: play.beatmap.name.clone(),
+            mods: play.gameplay.mods,
+            od: calc::effective_od(f64::from(play.beatmap.od), play.gameplay.mods),
+            errors: play.errors.clone(),
+        })
     }
 
     /// One poll. Returns at most two events (a retry ends one play and
@@ -163,7 +185,8 @@ impl Tracker {
 
 fn finish(play: CurrentPlay, count_autopilot: bool) -> FinishedPlay {
     let mods = play.gameplay.mods;
-    let cutoff = calc::cutoff_100(calc::effective_od(f64::from(play.beatmap.od), mods));
+    let od = calc::effective_od(f64::from(play.beatmap.od), mods);
+    let cutoff = calc::cutoff_100(od);
 
     let mut excluded_mods = excluded::RELAX | excluded::AUTOPLAY | excluded::CINEMA;
     if !count_autopilot {
@@ -197,6 +220,7 @@ fn finish(play: CurrentPlay, count_autopilot: bool) -> FinishedPlay {
         map_name: play.beatmap.name,
         mods,
         errors: play.errors,
+        od,
         cutoff,
         outcome,
     }

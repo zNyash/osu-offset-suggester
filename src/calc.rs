@@ -59,6 +59,16 @@ pub fn cutoff_100(od: f64) -> i32 {
     (140.0 - 8.0 * od).floor() as i32
 }
 
+/// Edge of the 300 window in ms (for display).
+pub fn window_300(od: f64) -> i32 {
+    (80.0 - 6.0 * od).floor() as i32
+}
+
+/// Edge of the 50 window in ms; beyond it is a miss (for display).
+pub fn window_50(od: f64) -> i32 {
+    (200.0 - 10.0 * od).floor() as i32
+}
+
 /// Keep only hits strictly inside the 100 window. A hit exactly on the
 /// cutoff is a 50 in-game, so it is dropped too.
 pub fn filter_50s(errors: &[i32], cutoff: i32) -> Vec<i32> {
@@ -73,7 +83,7 @@ pub fn median(errors: &[i32]) -> Option<f64> {
     let mut sorted = errors.to_vec();
     sorted.sort_unstable();
     let mid = sorted.len() / 2;
-    Some(if sorted.len() % 2 == 0 {
+    Some(if sorted.len().is_multiple_of(2) {
         (f64::from(sorted[mid - 1]) + f64::from(sorted[mid])) / 2.0
     } else {
         f64::from(sorted[mid])
@@ -99,14 +109,18 @@ pub fn unstable_rate(errors: &[i32], rate: f64) -> Option<f64> {
 /// Full per-play pipeline: mods -> cutoff -> drop 50s -> min hits -> M, UR.
 /// Returns `None` when the play must be discarded.
 pub fn analyze_play(errors: &[i32], od: f64, mod_bits: u32) -> Option<PlayStats> {
-    let cutoff = cutoff_100(effective_od(od, mod_bits));
-    let kept = filter_50s(errors, cutoff);
+    analyze_with_effective_od(errors, effective_od(od, mod_bits), rate(mod_bits))
+}
+
+/// Same as [`analyze_play`], for an OD that already has HR/EZ applied.
+pub fn analyze_with_effective_od(errors: &[i32], effective_od: f64, rate: f64) -> Option<PlayStats> {
+    let kept = filter_50s(errors, cutoff_100(effective_od));
     if kept.len() < MIN_HITS {
         return None;
     }
     Some(PlayStats {
         median: median(&kept)?,
-        unstable_rate: unstable_rate(&kept, rate(mod_bits))?,
+        unstable_rate: unstable_rate(&kept, rate)?,
         hits: kept.len(),
     })
 }
@@ -172,6 +186,8 @@ mod tests {
         assert_eq!(cutoff_100(8.5), 72);
         // 140 - 8 * 8.7 = 70.4 -> 70
         assert_eq!(cutoff_100(8.7), 70);
+        assert_eq!(window_300(10.0), 20);
+        assert_eq!(window_50(10.0), 100);
     }
 
     #[test]

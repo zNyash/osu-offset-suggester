@@ -169,8 +169,10 @@ impl<M: MemSource> OsuReader<M> {
         self.memory
             .read(items + ARRAY_DATA + (from as u64) * 4, &mut bytes)?;
         let errors: Vec<i32> = bytes
-            .chunks_exact(4)
-            .map(|chunk| i32::from_le_bytes(chunk.try_into().expect("4-byte chunk")))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| i32::from_le_bytes(*chunk))
             .collect();
         ensure!(
             errors.iter().all(|e| e.abs() <= MAX_HIT_ERROR_MS),
@@ -258,8 +260,10 @@ impl<M: MemSource> OsuReader<M> {
         let mut bytes = vec![0; length as usize * 2];
         self.memory.read(string + 0x8, &mut bytes)?;
         let units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_le_bytes(*pair))
             .collect();
         String::from_utf16(&units).context("invalid UTF-16 string")
     }
