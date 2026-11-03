@@ -1,11 +1,11 @@
 //! Drawing the TUI. Pure rendering: reads `App`, never changes it.
 //!
-//! ┌ Global offset ─────────┐┌ Local offset (this map) ┐
-//! │ Apply / current / mean ││ Apply / current / basis │
-//! └────────────────────────┘└─────────────────────────┘
 //! ┌ osu! ─────────────────────────────────────────────┐
 //! │ connection, current global, live play, message    │
 //! └───────────────────────────────────────────────────┘
+//! ┌ Global offset ─────────┐┌ Local offset (this map) ┐
+//! │ Apply / current / mean ││ Apply / current / basis │
+//! └────────────────────────┘└─────────────────────────┘
 //! ┌ Hit errors (live or last play) ──────────────────┐
 //! │ histogram across the 50 window, coloured by zone │
 //! └───────────────────────────────────────────────────┘
