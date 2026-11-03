@@ -34,16 +34,16 @@ const COLOR_100: Color = Color::Rgb(136, 221, 85);
 const COLOR_50: Color = Color::Rgb(255, 204, 34);
 
 pub fn draw(frame: &mut Frame, app: &App) {
-    let [top, status, graph, table, footer] = Layout::vertical([
-        Constraint::Length(7),
+    let [status, offsets, graph, table, footer] = Layout::vertical([
         Constraint::Length(5),
+        Constraint::Length(7),
         Constraint::Min(8),
         Constraint::Length(10),
         Constraint::Length(1),
     ])
     .areas(frame.area());
     let [suggestion, local] =
-        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(top);
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(offsets);
 
     draw_suggestion(frame, suggestion, app);
     draw_local(frame, local, app);
@@ -503,6 +503,8 @@ mod tests {
         assert!(screen.contains("Connected (pid 1234)"));
         assert!(screen.contains("Recent plays (3/50)"));
         assert!(screen.contains("Last play: M"));
+        // Status panel sits above the offsets row.
+        assert!(screen.find("Connected (pid 1234)") < screen.find("┌ Global offset"));
     }
 
     #[test]
