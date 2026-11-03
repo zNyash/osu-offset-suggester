@@ -1,6 +1,6 @@
 [package]
 name = "osu-offset-suggester"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 description = "Suggests global and per-beatmap offsets for osu! stable from your recent plays' hit errors"
 license = "GPL-3.0-or-later"
