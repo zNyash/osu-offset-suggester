@@ -9,20 +9,20 @@ use std::{
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
 
-const APP_NAME: &str = "offset-suggester";
+const APP_NAME: &str = "osu-offset-suggester";
 
 fn project_dirs() -> Result<ProjectDirs> {
     ProjectDirs::from("", "", APP_NAME).context("could not determine the home directory")
 }
 
-/// Linux: `~/.config/offset-suggester/settings.toml`
-/// Windows: `%APPDATA%\offset-suggester\config\settings.toml`
+/// Linux: `~/.config/osu-offset-suggester/settings.toml`
+/// Windows: `%APPDATA%\osu-offset-suggester\config\settings.toml`
 pub fn settings_path() -> Result<PathBuf> {
     Ok(project_dirs()?.config_dir().join("settings.toml"))
 }
 
-/// Linux: `~/.local/share/offset-suggester/history.json`
-/// Windows: `%APPDATA%\offset-suggester\data\history.json`
+/// Linux: `~/.local/share/osu-offset-suggester/history.json`
+/// Windows: `%APPDATA%\osu-offset-suggester\data\history.json`
 pub fn history_path() -> Result<PathBuf> {
     Ok(project_dirs()?.data_dir().join("history.json"))
 }

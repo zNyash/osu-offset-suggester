@@ -888,23 +888,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "offset-suggester"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "directories",
- "memchr",
- "proc-maps",
- "ratatui",
- "read-process-memory",
- "serde",
- "serde_json",
- "sysinfo",
- "tempfile",
- "toml",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -923,6 +906,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bb71e1b3fa6ca1c61f383464aaf2bb0e2f8e772a1f01d486832464de363b951"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "osu-offset-suggester"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "directories",
+ "memchr",
+ "proc-maps",
+ "ratatui",
+ "read-process-memory",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]

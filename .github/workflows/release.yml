@@ -1,7 +1,7 @@
 name: Release
 
-# Push a tag like `v0.1.0` to build both binaries and publish a GitHub
-# Release with them attached. "Run workflow" (manual) only builds and
+# Push a tag like `v1.0.0` to build both binaries and publish a GitHub
+# Release with them attached (`v1.0.1-beta.1` makes a prerelease). "Run workflow" (manual) only builds and
 # uploads the binaries as workflow artifacts, without creating a release.
 #
 # Targets:
@@ -19,7 +19,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  BIN: offset-suggester
+  BIN: osu-offset-suggester
 
 jobs:
   build:
@@ -83,15 +83,12 @@ jobs:
             tar -C dist -czf "dist/${name}.tar.gz" "${name}"
             asset="dist/${name}.tar.gz"
           fi
-          (cd dist && sha256sum "$(basename "$asset")" > "$(basename "$asset").sha256")
           echo "asset=${asset}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: |
-            ${{ steps.package.outputs.asset }}
-            ${{ steps.package.outputs.asset }}.sha256
+          path: ${{ steps.package.outputs.asset }}
 
   release:
     name: Publish release
@@ -108,3 +105,5 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          # Tags with a hyphen (v1.0.1-beta.1) are marked as prereleases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
